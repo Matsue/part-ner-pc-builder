@@ -4,7 +4,7 @@
 
 A PC-parts storefront where a person and their AI assistant work on the **same live build**. The assistant can display a shortlist, explain compatibility problems, and stage changes through WebMCP. The person can inspect the actual products, choose parts, and approve a preview in the page.
 
-[**Try the live demo**](https://part-ner-pc-builder.hiroki-matsue.chatgpt.site/) · [The WebMCP Challenge](https://webmcp.devpost.com/) · [Source code](https://github.com/Matsue/part-ner-pc-builder)
+[**Try the live demo**](https://part-ner-pc-builder.hiroki-matsue.chatgpt.site/) · [**Watch the demo video**](https://www.youtube.com/watch?v=Wve2lXxQxXo) · [The WebMCP Challenge](https://webmcp.devpost.com/) · [Source code](https://github.com/Matsue/part-ner-pc-builder)
 
 The demo is publicly accessible on **ChatGPT Sites**. No site login, credentials, purchase, or application API key is required.
 
@@ -231,4 +231,4 @@ AI image generation produced the fictional component renders and project artwork
 
 This project is licensed under the **[MIT License](LICENSE)**. Third-party dependencies retain their respective licenses.
 
-This README provides the project explanation and testing instructions. The separate public demo video has not been linked here yet; the challenge requests a public YouTube demo under three minutes with audio. Updating this repository does not submit a Devpost entry.
+This README provides the project explanation and testing instructions. The [demo video is available on YouTube](https://www.youtube.com/watch?v=Wve2lXxQxXo). Updating this repository does not submit a Devpost entry.
