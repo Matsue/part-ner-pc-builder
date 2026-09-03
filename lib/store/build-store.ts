@@ -9,11 +9,12 @@ import type {
   Product,
   Recommendation,
   SelectedBuild,
+  SelectionSources,
 } from '../domain/types.ts';
 
 export const defaultGoal: BuildGoal = {
   budgetUsd: 2_000,
-  theme: 'white',
+  theme: 'any',
   priority: 'balanced',
   games: [
     { gameId: 'astral-frontier', resolution: '1440p', preset: 'high', targetFps: 60 },
@@ -26,7 +27,9 @@ type MutationActor = 'human' | 'agent';
 export type BuildStore = {
   version: number;
   goal: BuildGoal;
+  themeExplicitlySet: boolean;
   selected: SelectedBuild;
+  selectionSources: SelectionSources;
   activeCategory: Category;
   recommendation: Recommendation | null;
   preview: BuildPreview | null;
@@ -60,7 +63,9 @@ export function createBuildStore(): StoreApi<BuildStore> {
   return createStore<BuildStore>((set, get) => ({
     version: 0,
     goal: defaultGoal,
+    themeExplicitlySet: false,
     selected: {},
+    selectionSources: {},
     activeCategory: 'case',
     recommendation: null,
     preview: null,
@@ -71,6 +76,7 @@ export function createBuildStore(): StoreApi<BuildStore> {
       if (!product) throw new Error('PRODUCT_NOT_FOUND');
       set((state) => ({
         selected: withProduct(state.selected, product),
+        selectionSources: { ...state.selectionSources, [product.category]: actor },
         version: state.version + 1,
         activeCategory: product.category,
         lastMutation: actor,
@@ -79,6 +85,7 @@ export function createBuildStore(): StoreApi<BuildStore> {
     setGoal: (goal, actor = 'agent') => {
       set((state) => ({
         goal: { ...state.goal, ...goal },
+        themeExplicitlySet: state.themeExplicitlySet || goal.theme !== undefined,
         version: state.version + 1,
         lastMutation: actor,
       }));
@@ -118,18 +125,30 @@ export function createBuildStore(): StoreApi<BuildStore> {
       const preview = get().preview;
       if (!preview || preview.id !== previewId) throw new Error('PREVIEW_NOT_FOUND');
       assertVersion(get().version, preview.basedOnBuildVersion, 'PREVIEW_EXPIRED');
-      set((state) => ({
-        selected: preview.after,
-        version: state.version + 1,
-        preview: null,
-        lastMutation: actor,
-      }));
+      set((state) => {
+        const selectionSources = { ...state.selectionSources };
+        for (const category of Object.keys(preview.changes) as Category[]) {
+          if (!preview.after[category]) delete selectionSources[category];
+          else if (state.selected[category]?.id !== preview.after[category]?.id) {
+            // Approving a batch is not an independent manual style choice.
+            selectionSources[category] = 'preview';
+          }
+        }
+        return {
+          selected: preview.after,
+          selectionSources,
+          version: state.version + 1,
+          preview: null,
+          lastMutation: actor,
+        };
+      });
       return preview;
     },
     dismissPreview: () => set({ preview: null }),
     clearBuild: () =>
       set((state) => ({
         selected: {},
+        selectionSources: {},
         recommendation: null,
         preview: null,
         version: state.version + 1,

@@ -1,7 +1,8 @@
 import { evaluateCompatibility } from './compatibility.ts';
 import { products } from './data.ts';
 import { evaluateBuildGoals } from './goals.ts';
-import type { BuildGoal, Category, Product, Recommendation, SelectedBuild } from './types.ts';
+import { resolveColorPreference } from './preferences.ts';
+import type { BuildGoal, Category, ColorPreference, Product, Recommendation, SelectedBuild } from './types.ts';
 
 const categoryLabels: Record<Category, string> = {
   case: 'Case', gpu: 'GPU', cpu: 'CPU', motherboard: 'Motherboard', psu: 'Power supply',
@@ -13,12 +14,25 @@ function performanceScore(product: Product) {
   return 0;
 }
 
-function productReason(product: Product, selected: SelectedBuild) {
+function meetsGpuTargets(product: Product, selected: SelectedBuild, goal: BuildGoal) {
+  if (product.category !== 'gpu' || goal.games.length === 0) return false;
+  const build = { ...selected, gpu: product };
+  const goals = evaluateBuildGoals(build, goal);
+  return evaluateCompatibility(build).status === 'compatible' && goals.remainingUsd >= 0
+    && goals.games.every((game) => game.status === 'meets_goal');
+}
+
+function productReason(product: Product, selected: SelectedBuild, goal: BuildGoal) {
   switch (product.category) {
     case 'cpu':
       return `${product.socket} socket, ${product.tdpW} W TDP. ${selected.motherboard ? 'Compare the socket with your selected motherboard.' : `Requires an ${product.socket} motherboard; none is selected yet.`} CPU changes do not affect this demo's GPU-based FPS estimates.`;
-    case 'gpu':
-      return `${product.vramGb} GB VRAM, ${product.lengthMm} mm long; recommends a ${product.recommendedPsuW} W PSU. Compare the app-calculated FPS and color trade-offs below.`;
+    case 'gpu': {
+      const meetsTargets = meetsGpuTargets(product, selected, goal);
+      const cheapest = meetsTargets && !products.some((other) => other.priceUsd < product.priceUsd && meetsGpuTargets(other, selected, goal));
+      const benefit = cheapest ? 'Lowest-priced compatible GPU meeting every FPS target.'
+        : meetsTargets ? 'Meets every FPS target.' : 'Compare the FPS estimates with your targets.';
+      return `${benefit} ${product.color === 'white' ? 'White' : 'Black'} finish, ${product.vramGb} GB VRAM; ${product.lengthMm} mm long, ${product.recommendedPsuW} W PSU recommended.`;
+    }
     case 'case':
       return `${product.color} finish; fits ${product.motherboardForms.join('/')} boards, graphics cards up to ${product.maxGpuLengthMm} mm, and ${product.psuForm} power supplies.`;
     case 'motherboard':
@@ -35,6 +49,7 @@ export function recommendProducts(
   category: Category,
   basedOnBuildVersion: number,
   count = 3,
+  preference: ColorPreference = resolveColorPreference(goal, selected),
 ): Recommendation {
   const ranked = products.filter((product) => product.category === category).map((product) => {
     const projected = { ...selected, [category]: product };
@@ -45,9 +60,9 @@ export function recommendProducts(
       compatibility.issues.filter((issue) => issue.severity === 'error').length,
       compatibility.issues.filter((issue) => issue.severity === 'warning').length,
       Math.max(0, -goals.remainingUsd),
-      goal.priority === 'budget' ? 0 : Number(goals.theme.status === 'misses_goal'),
-      goal.priority === 'budget' ? 0 : goals.games.filter((game) => game.status !== 'meets_goal').length,
+      goals.games.filter((game) => game.status !== 'meets_goal').length,
       goal.priority === 'performance' ? -performanceScore(product) : 0,
+      goal.priority === 'budget' || preference.theme === 'any' || !product.color ? 0 : Number(product.color !== preference.theme),
       product.priceUsd,
     ];
     return { product, rank, compatibility };
@@ -65,9 +80,12 @@ export function recommendProducts(
     title: `${categoryLabels[category]} options for your build`,
     candidates: ranked.map(({ product, compatibility }, index) => ({
       productId: product.id,
-      angle: index === 0 && compatibility.status === 'compatible' ? 'BEST BALANCE' :
-        goal.priority === 'performance' && performanceScore(product) > 0 ? 'PERFORMANCE' : 'ALTERNATIVE',
-      reason: productReason(product, selected),
+      angle: index === 0 && compatibility.status === 'compatible'
+        && (category !== 'gpu' || meetsGpuTargets(product, selected, goal)) ? 'BEST BALANCE'
+        : product.color && product.color !== ranked[0].product.color ? 'AESTHETICS'
+        : performanceScore(product) > performanceScore(ranked[0].product) ? 'PERFORMANCE'
+        : product.priceUsd < ranked[0].product.priceUsd ? 'BUDGET' : 'ALTERNATIVE',
+      reason: productReason(product, selected, goal),
     })),
   };
 }

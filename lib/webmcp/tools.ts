@@ -7,6 +7,8 @@ import { currency } from '../domain/currency.ts';
 import { products, productsById } from '../domain/data.ts';
 import { evaluateBuildGoals, totalBuildPrice } from '../domain/goals.ts';
 import { recommendProducts } from '../domain/recommendations.ts';
+import { resolveColorPreference } from '../domain/preferences.ts';
+import { describeCandidateTradeoffs } from '../domain/tradeoffs.ts';
 import { categories } from '../domain/types.ts';
 import type {
   BuildChangeIds,
@@ -58,6 +60,7 @@ function selectedProducts(build: SelectedBuild) {
       name: product.name,
       category: product.category,
       priceUsd: product.priceUsd,
+      color: product.color ?? null,
     } : null]),
   );
 }
@@ -72,6 +75,7 @@ export function currentBuildSnapshot(store: StoreApi<BuildStore>) {
     activeCategory: state.activeCategory,
     visibleRecommendations: state.recommendation?.category === state.activeCategory ? state.recommendation : null,
     goal: state.goal,
+    colorPreference: resolveColorPreference(state.goal, state.selected, state.selectionSources, state.themeExplicitlySet),
     selectedProducts: selectedProducts(state.selected),
     totalUsd: goals.totalUsd,
     remainingBudgetUsd: goals.remainingUsd,
@@ -89,7 +93,7 @@ function projectProduct(build: SelectedBuild, product: Product): SelectedBuild {
   return { ...build, [product.category]: product } as SelectedBuild;
 }
 
-function productSearchResult(product: Product, state: BuildStore) {
+function productSearchResult(product: Product, state: BuildStore, alternatives: Product[] = []) {
   const projected = projectProduct(state.selected, product);
   const compatibility = evaluateCompatibility(projected);
   const goals = evaluateBuildGoals(projected, state.goal);
@@ -100,6 +104,7 @@ function productSearchResult(product: Product, state: BuildStore) {
     category: product.category,
     priceUsd: product.priceUsd,
     facts: product,
+    tradeoffs: describeCandidateTradeoffs(product, state.selected, state.goal, alternatives),
     compatibility: {
       status: compatibility.status,
       issues: compatibility.issues,
@@ -160,7 +165,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'get_current_build',
       title: 'Get current PC build',
-      description: 'Read the latest live PC build, goals, compatibility, and visible recommendations. This does not recommend or display parts. For a part-selection question, use recommend_products to present options in the page; it reads the latest build itself.',
+      description: 'Read the latest live PC build, stated goals, colorPreference with its explicit/inferred/unspecified source, compatibility, and visible recommendations. A case alone does not imply a color preference. Matching manually selected case and GPU colors provide a tentative hint, not a stated requirement. This does not recommend or display parts. For a part-selection question, use recommend_products to present options in the page; it reads the latest build itself.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute: () => currentBuildSnapshot(store),
@@ -173,7 +178,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
         type: 'object',
         properties: {
           budgetUsd: { type: 'number', minimum: 1, description: 'Total parts budget in US dollars (USD), not cents.' },
-          theme: { type: 'string', enum: ['white', 'black', 'any'] },
+          theme: { type: 'string', enum: ['white', 'black', 'any'], description: 'Set only when the user explicitly states a color preference (or explicitly says color does not matter: any). Omit for a budget/FPS-only request. Do not turn a selected case color or inferred preference into a stated goal.' },
           priority: { type: 'string', enum: ['balanced', 'performance', 'budget', 'aesthetics'] },
           games: {
             type: 'array',
@@ -234,7 +239,9 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
         const count = input.count === undefined ? 3 : requiredNumber(input, 'count');
         if (!Number.isInteger(count) || count < 1 || count > 3) throw new Error('INVALID_COUNT');
         const state = store.getState();
-        const recommendation = recommendProducts(state.selected, state.goal, category, state.version, count);
+        const colorPreference = resolveColorPreference(state.goal, state.selected, state.selectionSources, state.themeExplicitlySet);
+        const recommendation = recommendProducts(state.selected, state.goal, category, state.version, count, colorPreference);
+        const alternatives = recommendation.candidates.map((candidate) => productsById[candidate.productId]);
         store.getState().showCandidates(recommendation);
         return {
           currency,
@@ -245,13 +252,14 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
           count: recommendation.candidates.length,
           productIds: recommendation.candidates.map((candidate) => candidate.productId),
           candidates: recommendation.candidates,
-          products: recommendation.candidates.map((candidate) => productSearchResult(productsById[candidate.productId], state)),
+          colorPreference,
+          products: alternatives.map((product) => productSearchResult(product, state, alternatives)),
           missingCategories: categories.filter((item) => !state.selected[item]),
           notes: [
             'Cards are displayed in the page. No parts have been added or changed.',
             'Projected totals include only selected parts plus each candidate, not a completed build. Unselected parts still need budget.',
             'FPS estimates in this demo are GPU-based; CPU gaming scores do not change the displayed FPS. All products and benchmarks are fictional.',
-            'Options are ranked by compatibility, budget, theme, and game goals. Check the returned trade-offs; not every option necessarily meets all goals.',
+            'Compatibility, budget, and FPS targets take precedence. When color is unspecified, choose value; a single case does not establish a color preference. Matching manual case/GPU choices supply a tentative color hint for later suggestions, not a new goal. Explain inferred preferences as tentative and allow the user to correct them.',
           ],
         };
       },

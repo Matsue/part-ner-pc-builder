@@ -29,6 +29,8 @@ import { evaluateCompatibility } from '@/lib/domain/compatibility';
 import { formatUsd } from '@/lib/domain/currency';
 import { games, products, productsById } from '@/lib/domain/data';
 import { evaluateBuildGoals } from '@/lib/domain/goals';
+import { resolveColorPreference } from '@/lib/domain/preferences';
+import { describeCandidateTradeoffs } from '@/lib/domain/tradeoffs';
 import type { Category, Product } from '@/lib/domain/types';
 import { buildStore } from '@/lib/store/build-store';
 import { baseToolNames, useWebMcpRegistration } from '@/lib/webmcp/use-webmcp';
@@ -83,6 +85,11 @@ function GoalPill({ children }: { children: React.ReactNode }) {
 function AppHeader() {
   const goal = useStore(buildStore, (state) => state.goal);
   const version = useStore(buildStore, (state) => state.version);
+  const selected = useStore(buildStore, (state) => state.selected);
+  const selectionSources = useStore(buildStore, (state) => state.selectionSources);
+  const themeExplicitlySet = useStore(buildStore, (state) => state.themeExplicitlySet);
+  const preference = resolveColorPreference(goal, selected, selectionSources, themeExplicitlySet);
+  const colorLabel = preference.theme === 'white' ? 'White' : 'Black';
 
   return (
     <header className="app-header">
@@ -98,7 +105,11 @@ function AppHeader() {
         </div>
         <div className="header-goals" aria-label="Current build goals">
           <GoalPill><WalletCards className="size-3.5 text-lime-300" /> {formatUsd(goal.budgetUsd)} USD</GoalPill>
-          <GoalPill><span className={`size-2 rounded-full ${goal.theme === 'black' ? 'border border-zinc-500 bg-zinc-900' : 'bg-zinc-100'}`} /> {goal.theme === 'any' ? 'Any color' : `${goal.theme === 'white' ? 'White' : 'Black'} build`}</GoalPill>
+          <GoalPill>
+            <span className={`size-2 rounded-full ${preference.theme === 'black' ? 'border border-zinc-500 bg-zinc-900' : preference.theme === 'white' ? 'bg-zinc-100' : 'bg-zinc-400'}`} />
+            {preference.source === 'inferred' ? `${colorLabel} style · inferred from choices`
+              : preference.theme === 'any' ? 'No color preference' : `${colorLabel} build`}
+          </GoalPill>
           {goal.games.map((game) => (
             <GoalPill key={game.gameId}>
               <Gauge className="size-3.5 text-cyan-300" />
@@ -280,11 +291,8 @@ function RecommendationSection() {
           const compatibility = evaluateCompatibility(projected);
           const goals = evaluateBuildGoals(projected, goal);
           const isSelected = selected[product.category]?.id === product.id;
-          const tradeoff = goals.remainingUsd < 0
-            ? `${formatUsd(Math.abs(goals.remainingUsd))} over the total budget.`
-            : product.color && goal.theme !== 'any' && product.color !== goal.theme
-              ? `Does not match your ${goal.theme} color scheme.`
-              : `Leaves ${formatUsd(goals.remainingUsd)} for the rest of the build.`;
+          const tradeoffs = describeCandidateTradeoffs(product, selected, goal,
+            recommendation.candidates.map((item) => productsById[item.productId]).filter(Boolean));
           return (
             <article key={candidate.productId} className={`recommendation-card ${index === 0 ? 'recommendation-card--lead' : ''}`}>
               <div className="flex items-center justify-between gap-2">
@@ -313,7 +321,14 @@ function RecommendationSection() {
 
               <div className="mt-3 space-y-2 text-small leading-relaxed">
                 <div><span className="font-bold text-zinc-400">Why this one? </span><span className="text-muted-foreground">{candidate.reason}</span></div>
-                <div><span className="font-bold text-zinc-400">Trade-off </span><span className="text-muted-foreground">{tradeoff}</span></div>
+                {tradeoffs.length > 0 && (
+                  <div>
+                    <span className="font-bold text-zinc-400">Trade-offs</span>
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-muted-foreground">
+                      {tradeoffs.map((tradeoff) => <li key={tradeoff}>{tradeoff}</li>)}
+                    </ul>
+                  </div>
+                )}
                 <div className={`flex items-center gap-1.5 font-bold ${compatibility.status === 'error' ? 'text-red-400' : compatibility.status === 'warning' ? 'text-amber-300' : 'text-lime-300'}`}>
                   {compatibility.status === 'compatible' ? <ShieldCheck className="size-3" /> : <CircleAlert className="size-3" />}
                   {compatibility.status === 'compatible' ? 'Compatible with the current build' : compatibility.issues[0]?.title}
@@ -475,10 +490,10 @@ function BuildSidebar() {
             {evaluation.budget.status === 'meets_goal' ? <Check className="size-3" /> : <CircleAlert className="size-3" />}
             <span>{evaluation.budget.status === 'meets_goal' ? 'Within budget' : 'Over budget'}</span>
           </div>
-          <div className={`goal-check ${evaluation.theme.status === 'meets_goal' ? 'goal-check--pass' : 'goal-check--fail'}`}>
+          {goal.theme !== 'any' && <div className={`goal-check ${evaluation.theme.status === 'meets_goal' ? 'goal-check--pass' : 'goal-check--fail'}`}>
             {evaluation.theme.status === 'meets_goal' ? <Check className="size-3" /> : <CircleAlert className="size-3" />}
             <span>{evaluation.theme.status === 'meets_goal' ? 'Color match' : 'Color mismatch'}</span>
-          </div>
+          </div>}
         </div>
       </div>
 

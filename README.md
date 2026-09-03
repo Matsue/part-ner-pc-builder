@@ -38,21 +38,23 @@ The ordinary storefront still works without WebMCP. Browsing the public site req
 
 ### Suggested walkthrough
 
-Start with a fresh page, or use **Reset build** in **Your build**. A fresh page starts with a $2,000 budget and a white theme. Reset clears selected parts and previews, but preserves any goals you changed.
+Start with a fresh page. It starts with a $2,000 budget and **no color preference**. **Reset build** clears selected parts, previews, and inferred preferences, but preserves explicitly changed goals; reload the page to repeat this exact scenario.
 
 **1. Make a human choice.** Select **AeroFrame N1 White** in the Case category.
 
 **2. Ask for GPU options.**
 
-> I have a $2,000 budget and want a white build. I want to play Astral Frontier at 1440p High at 60 FPS and Neon Arena at 1440p Competitive at 144 FPS or higher. Recommend three GPUs and show the options on this page. Don't add any parts yet.
+> Help me build a gaming PC under $2,000. I want to play Astral Frontier at 1440p High at 60 FPS or better, and Neon Arena at 144 FPS or better. Start with three GPU options.
 
-Expected: the shared goals reflect the request, the Graphics card category opens, and three recommendation cards appear with factual trade-offs. The selected case remains unchanged. Choose **PixelForge V70 White 12GB** yourself.
+Expected: the Graphics card category opens with **VectorArc G88 16GB** ($828, **BEST BALANCE**), **PixelForge V70 White 12GB** ($898, **AESTHETICS**), and **VectorArc G96 16GB** ($998, **PERFORMANCE**). The case alone does not establish a color preference. G88 is cheaper and has more VRAM and higher estimated FPS than V70 White; the white GPU still meets both targets and is 16 mm shorter. Trade-offs compare these concrete differences, not just the remaining budget.
+
+Choose **PixelForge V70 White 12GB** yourself for its appearance, despite G88's value advantage. Only now do the matching manual case/GPU selections produce a **tentative white-style preference**, shown as inferred in the header and returned to the agent with the supporting product IDs. Stated goals are not silently rewritten. Agent-selected parts and approved batch previews do not create this inference.
 
 **3. Continue naturally.**
 
 > Which CPU would you recommend?
 
-Expected: three CPU candidates appear in the page, taking the current build into account. With the case and GPU above, **CorePeak A6-65** ranks first. No CPU is selected automatically.
+Expected: three CPU candidates appear in the page, taking the current build into account. With the case and GPU above, **CorePeak A6-65** ranks first. No CPU is selected automatically. The agent can acknowledge that the manual choices suggest an aesthetic preference; later motherboard/PSU suggestions favor matching colors when compatible and within budget. An explicit color request—or “color does not matter”—overrides the inference. Natural-language acknowledgment still depends on the host agent.
 
 **4. Stage a multi-part change.**
 
@@ -77,7 +79,7 @@ Expected: the assistant can use the newly available `resolve_build_issues` tool,
 | CPU | CorePeak A6-65 | `cpu-01` | $448.00 |
 | Motherboard | FrostBoard A5M Ice | `mb-02` | $278.00 |
 | Power supply | VoltNest 750 Snow | `psu-04` | $158.00 |
-| **Total** | **Compatible; white theme; $30 remaining** | | **$1,970.00** |
+| **Total** | **Compatible; all colored parts white; $30 remaining** | | **$1,970.00** |
 
 With the default goals, the demo calculates **70–78 FPS** for Astral Frontier and **186–206 FPS** for Neon Arena. These are fictional model outputs, not measured benchmarks. This total covers only the five supported categories, not a complete real PC.
 
@@ -189,7 +191,7 @@ npx --no-install oxlint app lib scripts
 npx --no-install tsc --noEmit --incremental false
 ```
 
-All **26 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, preview expiry, image/alt-text coverage, update announcements, and static-preview configuration.
+All **35 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, value-first GPU ranking, tentative color preferences with manual-selection provenance and explicit overrides, factual trade-offs, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, preview expiry, image/alt-text coverage, update announcements, and static-preview configuration.
 
 The scoped application lint command above passes. The repository-wide `npm run lint` also checks test typing and currently reports pre-existing issues; it is not a clean full-repository gate.
 

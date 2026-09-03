@@ -87,6 +87,14 @@ export type BuildGoal = {
   games: GameGoal[];
 };
 
+export type SelectionSources = Partial<Record<Category, 'human' | 'agent' | 'preview'>>;
+
+export type ColorPreference = {
+  theme: Theme;
+  source: 'unspecified' | 'explicit' | 'inferred';
+  evidenceProductIds: string[];
+};
+
 export type CompatibilityIssue = {
   code:
     | 'CPU_SOCKET_MISMATCH'

@@ -1,6 +1,7 @@
 import { evaluateCompatibility } from '../domain/compatibility.ts';
 import { formatUsd } from '../domain/currency.ts';
 import { evaluateBuildGoals } from '../domain/goals.ts';
+import { resolveColorPreference } from '../domain/preferences.ts';
 import { categories, type Category } from '../domain/types.ts';
 import type { BuildStore } from '../store/build-store.ts';
 
@@ -38,7 +39,12 @@ export function describeBuildUpdate(previous: BuildStore, current: BuildStore): 
     }
     const expired = current.preview && current.preview.basedOnBuildVersion !== current.version
       && previous.preview?.basedOnBuildVersion === previous.version;
-    return `${action} ${buildSummary(current)}${expired ? ' Your preview is out of date. Request a new preview.' : ''}`;
+    const beforePreference = resolveColorPreference(previous.goal, previous.selected, previous.selectionSources, previous.themeExplicitlySet);
+    const preference = resolveColorPreference(current.goal, current.selected, current.selectionSources, current.themeExplicitlySet);
+    const inferred = preference.source === 'inferred'
+      && (beforePreference.source !== 'inferred' || beforePreference.theme !== preference.theme)
+      ? ` Your case and GPU choices suggest a ${preference.theme} style preference. This is inferred, not a stated goal.` : '';
+    return `${action} ${buildSummary(current)}${inferred}${expired ? ' Your preview is out of date. Request a new preview.' : ''}`;
   }
   if (current.preview !== previous.preview) {
     return current.preview

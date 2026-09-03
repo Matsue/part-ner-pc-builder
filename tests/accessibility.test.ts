@@ -56,3 +56,16 @@ test('goal changes report the current budget while category navigation stays qui
   before.setGoal({ budgetUsd: 300 });
   assert.match(describeBuildUpdate(before, store.getState()), /Goals updated.*Budget: \$300.00/);
 });
+
+test('announces a style inference only after matching manual case and GPU choices', () => {
+  const store = createBuildStore();
+  const initial = store.getState();
+  initial.selectProduct('case-01');
+  assert.doesNotMatch(describeBuildUpdate(initial, store.getState()), /inferred/);
+  const beforeGpu = store.getState();
+  beforeGpu.selectProduct('gpu-02');
+  assert.match(describeBuildUpdate(beforeGpu, store.getState()), /white style preference.*inferred, not a stated goal/);
+  const beforeCpu = store.getState();
+  beforeCpu.selectProduct('cpu-01');
+  assert.doesNotMatch(describeBuildUpdate(beforeCpu, store.getState()), /inferred/);
+});
