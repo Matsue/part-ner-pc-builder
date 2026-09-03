@@ -138,7 +138,7 @@ Human actions in React UI       Agent calls through WebMCP
          Catalog cards, shortlist, build, preview
 ```
 
-- **UI:** React 19, TypeScript, Tailwind CSS, shadcn/Base UI, Lucide icons.
+- **UI:** React 19, TypeScript, Tailwind CSS, a shadcn-derived Base UI button, Lucide icons.
 - **Build:** Vinext on Vite; static export via `output: 'export'`.
 - **Hosting:** public ChatGPT Sites deployment; configuration in [`.openai/hosting.json`](.openai/hosting.json).
 - **Data:** 30 fictional products, six in each category, with local WebP imagery. No database or live retailer integration.
@@ -146,7 +146,8 @@ Human actions in React UI       Agent calls through WebMCP
 
 Source map:
 
-- [`app/page.tsx`](app/page.tsx): catalog, recommendations, build summary, previews, debug panel.
+- [`app/page.tsx`](app/page.tsx): explicitly static route wrapping the browser-side builder.
+- [`app/pc-builder.tsx`](app/pc-builder.tsx): catalog, recommendations, build summary, previews, debug panel.
 - [`lib/store/build-store.ts`](lib/store/build-store.ts): shared state and versioned mutations.
 - [`lib/domain/`](lib/domain/): catalog/types, compatibility rules, budget/FPS calculations, ranking.
 - [`lib/webmcp/`](lib/webmcp/): tool contracts and browser registration.
@@ -161,20 +162,20 @@ Use **Node.js 24** and npm. The project declares Node.js `>=22.13.0`; Node 24 wa
 ```bash
 git clone https://github.com/Matsue/part-ner-pc-builder.git
 cd part-ner-pc-builder
-npm install
+npm ci
 npm run dev
 ```
 
-Open the local URL printed by the server, normally `http://localhost:3000`. No `.env` file, model API key, database, or deployment credentials are needed to run the app locally. npm is used here because this repository does not currently track a lockfile; `npm ci` is not applicable.
+Open the local URL printed by the server, normally `http://localhost:3000`. No `.env` file, model API key, database, or deployment credentials are needed to run the app locally. The committed `package-lock.json` pins the dependency tree; use `npm ci` for a reproducible install.
 
 To build and serve the static output:
 
 ```bash
 npm run build
-python3 -m http.server 4173 --bind 127.0.0.1 --directory dist/client
+npm start
 ```
 
-Open `http://127.0.0.1:4173`. Python 3 is needed only for this optional static-preview command; any local static server can serve `dist/client`. The existing `npm start` script targets a Worker development configuration, so use the static-preview command for this export.
+Open the URL printed by the preview server, normally `http://127.0.0.1:4173`. This serves the static export in `dist/client`; it is a local preview, not a production hosting service. Development and builds do not require Wrangler, Miniflare, or the Cloudflare Vite plugin.
 
 The checked-in Sites project configuration identifies the original deployment. Running locally does not grant deployment access; publishing your own copy requires your own hosting setup.
 
@@ -182,13 +183,19 @@ The checked-in Sites project configuration identifies the original deployment. R
 
 ```bash
 npm test
+npm run audit
 npm run lint:accessibility
 npx --no-install oxlint app lib scripts
+npx --no-install tsc --noEmit --incremental false
 ```
 
-All **25 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, preview expiry, image/alt-text coverage, and update announcements.
+All **26 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, preview expiry, image/alt-text coverage, update announcements, and static-preview configuration.
 
-The scoped application lint command above passes. The repository-wide `npm run lint` also checks unused scaffold components and test typing and currently reports pre-existing issues; it is not a clean full-repository gate.
+The scoped application lint command above passes. The repository-wide `npm run lint` also checks test typing and currently reports pre-existing issues; it is not a clean full-repository gate.
+
+Dependency maintenance uses exact direct versions and a committed lockfile. `npm run audit` checks runtime and development dependencies, failing even on low-severity findings. Unused UI scaffolding and Cloudflare development/deployment dependencies have been removed; the public site remains a static export hosted on ChatGPT Sites.
+
+`ipaddr.js` is kept as a build dependency because Vinext's image shim externalizes it during Node-based static rendering. `npm run build` also verifies that the home page and its local assets were actually emitted, catching silently skipped routes.
 
 Browser checks during development included:
 
