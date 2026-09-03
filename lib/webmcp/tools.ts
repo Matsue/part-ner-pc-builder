@@ -3,6 +3,7 @@
 import type { StoreApi } from 'zustand/vanilla';
 
 import { evaluateCompatibility } from '../domain/compatibility.ts';
+import { currency } from '../domain/currency.ts';
 import { products } from '../domain/data.ts';
 import { evaluateBuildGoals, totalBuildPrice } from '../domain/goals.ts';
 import type {
@@ -53,7 +54,7 @@ function selectedProducts(build: SelectedBuild) {
       id: product.id,
       name: product.name,
       category: product.category,
-      priceYen: product.priceYen,
+      priceUsd: product.priceUsd,
     } : null]),
   );
 }
@@ -63,11 +64,12 @@ export function currentBuildSnapshot(store: StoreApi<BuildStore>) {
   const compatibility = evaluateCompatibility(state.selected);
   const goals = evaluateBuildGoals(state.selected, state.goal);
   return {
+    currency,
     buildVersion: state.version,
     goal: state.goal,
     selectedProducts: selectedProducts(state.selected),
-    totalYen: goals.totalYen,
-    remainingBudgetYen: goals.remainingYen,
+    totalUsd: goals.totalUsd,
+    remainingBudgetUsd: goals.remainingUsd,
     compatibilityStatus: compatibility.status,
     compatibilityIssues: compatibility.issues,
     goalStatus: {
@@ -87,10 +89,11 @@ function productSearchResult(product: Product, state: BuildStore) {
   const compatibility = evaluateCompatibility(projected);
   const goals = evaluateBuildGoals(projected, state.goal);
   return {
+    currency,
     id: product.id,
     name: product.name,
     category: product.category,
-    priceYen: product.priceYen,
+    priceUsd: product.priceUsd,
     facts: product,
     compatibility: {
       status: compatibility.status,
@@ -101,8 +104,8 @@ function productSearchResult(product: Product, state: BuildStore) {
       theme: goals.theme,
       games: goals.games,
     },
-    projectedTotalYen: goals.totalYen,
-    remainingBudgetYen: goals.remainingYen,
+    projectedTotalUsd: goals.totalUsd,
+    remainingBudgetUsd: goals.remainingUsd,
   };
 }
 
@@ -134,13 +137,14 @@ function previewResult(
   const compatibility = evaluateCompatibility(preview.after);
   const goals = evaluateBuildGoals(preview.after, goal);
   return {
+    currency,
     previewId: preview.id,
     basedOnBuildVersion: preview.basedOnBuildVersion,
     before: selectedProducts(preview.before),
     after: selectedProducts(preview.after),
     changedParts: changedParts(preview.before, preview.after),
-    totalYen: goals.totalYen,
-    remainingBudgetYen: goals.remainingYen,
+    totalUsd: goals.totalUsd,
+    remainingBudgetUsd: goals.remainingUsd,
     compatibilityAfterChange: compatibility,
     gameGoalsAfterChange: goals.games,
   };
@@ -159,12 +163,11 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'set_build_goal',
       title: 'Set PC build goal',
-      description: 'Update the shared visible build goal after the user states their budget, visual theme, priority, or game targets.',
+      description: 'Update the shared visible build goal after the user states their budget in US dollars (USD), visual theme, priority, or game targets.',
       inputSchema: {
         type: 'object',
         properties: {
-          budgetYen: { type: 'number', minimum: 1 },
-          budget: { type: 'number', minimum: 1 },
+          budgetUsd: { type: 'number', minimum: 1, description: 'Total parts budget in US dollars (USD), not cents.' },
           theme: { type: 'string', enum: ['white', 'black', 'any'] },
           priority: { type: 'string', enum: ['balanced', 'performance', 'budget', 'aesthetics'] },
           games: {
@@ -189,10 +192,10 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
       execute: (rawInput) => {
         const input = objectInput(rawInput);
         const patch: Partial<BuildGoal> = {};
-        const budget = input.budgetYen ?? input.budget;
+        const budget = input.budgetUsd;
         if (budget !== undefined) {
-          if (typeof budget !== 'number' || budget <= 0) throw new Error('INVALID_BUDGET');
-          patch.budgetYen = budget;
+          if (typeof budget !== 'number' || !Number.isFinite(budget) || budget <= 0) throw new Error('INVALID_BUDGET');
+          patch.budgetUsd = budget;
         }
         if (input.theme !== undefined) patch.theme = requiredString(input, 'theme') as BuildGoal['theme'];
         if (input.priority !== undefined) patch.priority = requiredString(input, 'priority') as BuildGoal['priority'];
@@ -207,13 +210,13 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'find_products',
       title: 'Find compatible PC parts',
-      description: 'Search static product facts against the latest shared build and goal. Returns app-calculated compatibility, projected total, budget, and game performance; do not invent these facts.',
+      description: 'Search static product facts against the latest shared build and goal. All prices and budgets are in US dollars (USD). Returns app-calculated compatibility, projected total, budget, and game performance; do not invent these facts.',
       inputSchema: {
         type: 'object',
         properties: {
           category: { type: 'string', enum: ['case', 'gpu', 'cpu', 'motherboard', 'psu'] },
           compatibleOnly: { type: 'boolean', default: false },
-          maxPrice: { type: 'number', minimum: 0 },
+          maxPriceUsd: { type: 'number', minimum: 0, description: 'Maximum individual product price in US dollars (USD), not cents.' },
           limit: { type: 'integer', minimum: 1, maximum: 6, default: 6 },
         },
         required: ['category'],
@@ -223,16 +226,16 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
       execute: (rawInput) => {
         const input = objectInput(rawInput);
         const category = requiredString(input, 'category') as Category;
-        const maxPrice = typeof input.maxPrice === 'number' ? input.maxPrice : Number.POSITIVE_INFINITY;
+        const maxPrice = typeof input.maxPriceUsd === 'number' ? input.maxPriceUsd : Number.POSITIVE_INFINITY;
         const limit = typeof input.limit === 'number' ? Math.max(1, Math.min(6, Math.floor(input.limit))) : 6;
         const compatibleOnly = input.compatibleOnly === true;
         const state = store.getState();
         const results = products
-          .filter((product) => product.category === category && product.priceYen <= maxPrice)
+          .filter((product) => product.category === category && product.priceUsd <= maxPrice)
           .map((product) => productSearchResult(product, state))
           .filter((result) => !compatibleOnly || result.compatibility.status !== 'error')
           .slice(0, limit);
-        return { basedOnBuildVersion: state.version, category, count: results.length, products: results };
+        return { currency, basedOnBuildVersion: state.version, category, count: results.length, products: results };
       },
     },
     {
@@ -351,7 +354,7 @@ function cheapestMatchingProduct(
 ) {
   return products
     .filter((product) => product.category === category && predicate(product))
-    .sort((a, b) => a.priceYen - b.priceYen)[0];
+    .sort((a, b) => a.priceUsd - b.priceUsd)[0];
 }
 
 export function createResolveBuildIssuesTool(store: StoreApi<BuildStore>): WebMCP.ModelContextTool {
@@ -366,7 +369,7 @@ export function createResolveBuildIssuesTool(store: StoreApi<BuildStore>): WebMC
       const compatibility = evaluateCompatibility(state.selected);
       const issue = compatibility.issues.find((item) => item.severity === 'error');
       if (!issue) throw new Error('NO_COMPATIBILITY_ERRORS');
-      const plans: Array<{ id: string; label: string; changes: BuildChangeIds; tradeoff: string; projectedDeltaYen: number }> = [];
+      const plans: Array<{ id: string; label: string; changes: BuildChangeIds; tradeoff: string; projectedDeltaUsd: number }> = [];
 
       if (issue.code === 'CPU_SOCKET_MISMATCH' && state.selected.cpu && state.selected.motherboard) {
         const board = cheapestMatchingProduct('motherboard', (product) =>
@@ -382,14 +385,14 @@ export function createResolveBuildIssuesTool(store: StoreApi<BuildStore>): WebMC
           label: 'Keep the CPU; change the motherboard',
           changes: { motherboard: board.id },
           tradeoff: state.goal.theme === 'white' && board.color === 'white' ? 'Preserves the white theme.' : 'May make the visual theme mixed.',
-          projectedDeltaYen: board.priceYen - state.selected.motherboard.priceYen,
+          projectedDeltaUsd: board.priceUsd - state.selected.motherboard.priceUsd,
         });
         if (cpu) plans.push({
           id: 'keep-motherboard',
           label: 'Keep the motherboard; change the CPU',
           changes: { cpu: cpu.id },
           tradeoff: 'Changes the processor platform and may alter high-refresh performance.',
-          projectedDeltaYen: cpu.priceYen - state.selected.cpu.priceYen,
+          projectedDeltaUsd: cpu.priceUsd - state.selected.cpu.priceUsd,
         });
       } else {
         const affected = issue.affectedCategories[1];
@@ -398,18 +401,19 @@ export function createResolveBuildIssuesTool(store: StoreApi<BuildStore>): WebMC
             .filter((product) => product.category === affected)
             .map((product) => ({ product, build: projectProduct(state.selected, product) }))
             .filter(({ build }) => evaluateCompatibility(build).status !== 'error')
-            .sort((a, b) => a.product.priceYen - b.product.priceYen)[0]?.product;
+            .sort((a, b) => a.product.priceUsd - b.product.priceUsd)[0]?.product;
           if (replacement) plans.push({
             id: `replace-${affected}`,
             label: `Replace the ${affected}`,
             changes: { [affected]: replacement.id },
             tradeoff: 'Lowest-cost compatible replacement from the current catalog.',
-            projectedDeltaYen: totalBuildPrice(projectProduct(state.selected, replacement)) - totalBuildPrice(state.selected),
+            projectedDeltaUsd: totalBuildPrice(projectProduct(state.selected, replacement)) - totalBuildPrice(state.selected),
           });
         }
       }
 
       return {
+        currency,
         basedOnBuildVersion: state.version,
         issue,
         plans,

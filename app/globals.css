@@ -92,12 +92,14 @@ button { cursor: pointer; }
 .assistant-note { display: flex; gap: 10px; border: 1px solid rgb(190 242 100 / 12%); border-radius: 12px; background: rgb(190 242 100 / 5%); padding: 11px; font-size: 10px; line-height: 1.55; color: #71717a; }
 .assistant-note strong { color: #d4d4d8; }
 
-.product-card { display: flex; min-height: 215px; overflow: hidden; border: 1px solid rgb(255 255 255 / 8%); border-radius: 14px; background: linear-gradient(145deg, rgb(255 255 255 / 4%), rgb(255 255 255 / 1.5%)); transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.product-card { display: flex; flex-direction: column; min-height: 215px; overflow: hidden; border: 1px solid rgb(255 255 255 / 8%); border-radius: 14px; background: linear-gradient(145deg, rgb(255 255 255 / 4%), rgb(255 255 255 / 1.5%)); transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .product-card:hover { transform: translateY(-2px); border-color: rgb(255 255 255 / 15%); box-shadow: 0 18px 50px rgb(0 0 0 / 22%); }
 .product-card--selected { border-color: rgb(190 242 100 / 44%); box-shadow: inset 0 0 0 1px rgb(190 242 100 / 10%), 0 14px 45px rgb(190 242 100 / 5%); }
-.product-glyph { position: relative; display: flex; width: 104px; flex: none; flex-direction: column; align-items: center; justify-content: center; gap: 13px; overflow: hidden; border-right: 1px solid rgb(255 255 255 / 7%); background: radial-gradient(circle at 50% 35%, #323743, #161a21 68%); color: #9ca3af; }
-.product-glyph--light { background: radial-gradient(circle at 50% 35%, #e4e7ea, #9ca3af 70%); color: #333942; }
-.product-glyph__grid { position: absolute; inset: 0; opacity: .22; background-image: linear-gradient(rgb(255 255 255 / 16%) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 16%) 1px, transparent 1px); background-size: 13px 13px; mask-image: linear-gradient(to bottom, black, transparent 85%); }
+.product-image { position: relative; height: 190px; flex: none; overflow: hidden; border-bottom: 1px solid rgb(255 255 255 / 7%); background: #17191b; }
+.product-image img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.product-image__caption { position: absolute; bottom: 9px; left: 11px; border-radius: 4px; background: rgb(9 11 15 / 72%); padding: 3px 5px; font-size: 7px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a1a1aa; }
+.product-thumbnail { width: 56px; height: 56px; flex: none; overflow: hidden; border: 1px solid rgb(255 255 255 / 9%); border-radius: 9px; background: #17191b; }
+.product-thumbnail img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .selected-badge { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; border-radius: 999px; background: rgb(190 242 100 / 11%); padding: 4px 6px; font-size: 8px; font-weight: 800; text-transform: uppercase; color: #bef264; }
 .fact-chip { border: 1px solid rgb(255 255 255 / 7%); border-radius: 5px; background: rgb(255 255 255 / 2.5%); padding: 3px 5px; font-family: var(--font-mono); font-size: 8px; color: #71717a; }
 

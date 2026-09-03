@@ -12,7 +12,7 @@ import type {
 } from '../domain/types.ts';
 
 export const defaultGoal: BuildGoal = {
-  budgetYen: 200_000,
+  budgetUsd: 2_000,
   theme: 'white',
   priority: 'balanced',
   games: [

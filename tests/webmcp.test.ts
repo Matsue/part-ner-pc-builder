@@ -38,7 +38,7 @@ test('agent tools read and update the same store used by the human UI', async ()
     category: 'gpu',
     title: 'Three GPU paths',
     candidates: [
-      { productId: 'gpu-05', angle: 'BEST BALANCE', reason: 'Most performance per yen.' },
+      { productId: 'gpu-05', angle: 'BEST BALANCE', reason: 'Most performance per dollar.' },
       { productId: 'gpu-02', angle: 'WHITE BUILD', reason: 'Matches the chosen case.' },
       { productId: 'gpu-01', angle: 'BUDGET', reason: 'Leaves room for other parts.' },
     ],

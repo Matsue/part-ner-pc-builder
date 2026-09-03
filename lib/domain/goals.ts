@@ -21,11 +21,11 @@ function gameStatus(range: { min: number; max: number }, target: number): GoalSt
 }
 
 export function totalBuildPrice(build: SelectedBuild) {
-  return Object.values(build).reduce((sum, product) => sum + (product?.priceYen ?? 0), 0);
+  return Object.values(build).reduce((sum, product) => sum + (product?.priceUsd ?? 0), 0);
 }
 
 export function evaluateBuildGoals(build: SelectedBuild, goal: BuildGoal) {
-  const totalYen = totalBuildPrice(build);
+  const totalUsd = totalBuildPrice(build);
   const coloredParts = Object.values(build).filter(
     (product): product is NonNullable<typeof product> & { color: 'white' | 'black' } =>
       Boolean(product && 'color' in product && product.color),
@@ -48,11 +48,11 @@ export function evaluateBuildGoals(build: SelectedBuild, goal: BuildGoal) {
   });
 
   return {
-    totalYen,
-    remainingYen: goal.budgetYen - totalYen,
+    totalUsd,
+    remainingUsd: goal.budgetUsd - totalUsd,
     budget: {
-      status: (totalYen <= goal.budgetYen ? 'meets_goal' : 'misses_goal') as GoalStatus,
-      differenceYen: goal.budgetYen - totalYen,
+      status: (totalUsd <= goal.budgetUsd ? 'meets_goal' : 'misses_goal') as GoalStatus,
+      differenceUsd: goal.budgetUsd - totalUsd,
     },
     theme: {
       status: (themeMatches ? 'meets_goal' : 'misses_goal') as GoalStatus,

@@ -6,7 +6,7 @@ import { evaluateBuildGoals, fpsRange } from '../lib/domain/goals.ts';
 import type { BuildGoal } from '../lib/domain/types.ts';
 
 const goal: BuildGoal = {
-  budgetYen: 200_000,
+  budgetUsd: 2_000,
   theme: 'white',
   priority: 'balanced',
   games: [
@@ -41,7 +41,7 @@ test('representative white build meets budget, theme, and both games', () => {
     goal,
   );
 
-  assert.equal(result.totalYen, 197_000);
+  assert.equal(result.totalUsd, 1_970);
   assert.equal(result.budget.status, 'meets_goal');
   assert.equal(result.theme.status, 'meets_goal');
   assert.deepEqual(

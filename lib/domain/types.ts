@@ -11,7 +11,8 @@ type ProductBase = {
   id: string;
   category: Category;
   name: string;
-  priceYen: number;
+  priceUsd: number;
+  image: { src: string; alt: string };
   color?: ProductColor;
   blurb: string;
 };
@@ -80,7 +81,7 @@ export type GameGoal = {
 };
 
 export type BuildGoal = {
-  budgetYen: number;
+  budgetUsd: number;
   theme: Theme;
   priority: Priority;
   games: GameGoal[];
