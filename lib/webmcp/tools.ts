@@ -4,8 +4,10 @@ import type { StoreApi } from 'zustand/vanilla';
 
 import { evaluateCompatibility } from '../domain/compatibility.ts';
 import { currency } from '../domain/currency.ts';
-import { products } from '../domain/data.ts';
+import { products, productsById } from '../domain/data.ts';
 import { evaluateBuildGoals, totalBuildPrice } from '../domain/goals.ts';
+import { recommendProducts } from '../domain/recommendations.ts';
+import { categories } from '../domain/types.ts';
 import type {
   BuildChangeIds,
   BuildGoal,
@@ -21,6 +23,7 @@ import type { BuildStore } from '../store/build-store.ts';
 export const baseToolNames = [
   'get_current_build',
   'set_build_goal',
+  'recommend_products',
   'find_products',
   'show_product_candidates',
   'preview_build_changes',
@@ -66,6 +69,8 @@ export function currentBuildSnapshot(store: StoreApi<BuildStore>) {
   return {
     currency,
     buildVersion: state.version,
+    activeCategory: state.activeCategory,
+    visibleRecommendations: state.recommendation?.category === state.activeCategory ? state.recommendation : null,
     goal: state.goal,
     selectedProducts: selectedProducts(state.selected),
     totalUsd: goals.totalUsd,
@@ -155,7 +160,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'get_current_build',
       title: 'Get current PC build',
-      description: 'Read the latest live PC build, goal, budget, deterministic compatibility issues, and game-goal status. Call this again after the human changes a part.',
+      description: 'Read the latest live PC build, goals, compatibility, and visible recommendations. This does not recommend or display parts. For a part-selection question, use recommend_products to present options in the page; it reads the latest build itself.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute: () => currentBuildSnapshot(store),
@@ -163,7 +168,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'set_build_goal',
       title: 'Set PC build goal',
-      description: 'Update the shared visible build goal after the user states their budget in US dollars (USD), visual theme, priority, or game targets.',
+      description: 'Update the shared visible build goal after the user states their budget in US dollars (USD), visual theme, priority, or game targets. This does not display recommendations. If the user also asks for part options, then use recommend_products for that category.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -208,9 +213,53 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
       },
     },
     {
+      name: 'recommend_products',
+      title: 'Recommend and display PC part options',
+      description: 'Use when the user asks which PC part to choose, requests recommendations, alternatives, or a comparison, including follow-ups such as "Which CPU is best?", "CPUはどれがいい？", or "GPUを3つ選んで". Reads the latest shared build and goals, ranks catalog parts, switches to the requested category, and displays three candidate cards by default in one call. No separate search or show_product_candidates call is needed. Does not select, add, buy, or preview any parts, or change the budget. Returns displayed product IDs, factual trade-offs, and the unchanged build version. The user need not name a tool or explicitly ask to display cards. For an explicitly chat-only answer or raw facts without page changes, use find_products instead.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', enum: [...categories], description: 'The part the user is asking about, not necessarily the category currently open in the page.' },
+          count: { type: 'integer', minimum: 1, maximum: 3, default: 3, description: 'Number of visible options. Omit for three, even when the user only asks which part is best.' },
+        },
+        required: ['category'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: (rawInput) => {
+        const input = objectInput(rawInput);
+        if (Object.keys(input).some((key) => key !== 'category' && key !== 'count')) throw new Error('INVALID_INPUT');
+        const category = requiredString(input, 'category') as Category;
+        if (!categories.includes(category)) throw new Error('INVALID_CATEGORY');
+        const count = input.count === undefined ? 3 : requiredNumber(input, 'count');
+        if (!Number.isInteger(count) || count < 1 || count > 3) throw new Error('INVALID_COUNT');
+        const state = store.getState();
+        const recommendation = recommendProducts(state.selected, state.goal, category, state.version, count);
+        store.getState().showCandidates(recommendation);
+        return {
+          currency,
+          displayed: true,
+          buildChanged: false,
+          basedOnBuildVersion: state.version,
+          category,
+          count: recommendation.candidates.length,
+          productIds: recommendation.candidates.map((candidate) => candidate.productId),
+          candidates: recommendation.candidates,
+          products: recommendation.candidates.map((candidate) => productSearchResult(productsById[candidate.productId], state)),
+          missingCategories: categories.filter((item) => !state.selected[item]),
+          notes: [
+            'Cards are displayed in the page. No parts have been added or changed.',
+            'Projected totals include only selected parts plus each candidate, not a completed build. Unselected parts still need budget.',
+            'FPS estimates in this demo are GPU-based; CPU gaming scores do not change the displayed FPS. All products and benchmarks are fictional.',
+            'Options are ranked by compatibility, budget, theme, and game goals. Check the returned trade-offs; not every option necessarily meets all goals.',
+          ],
+        };
+      },
+    },
+    {
       name: 'find_products',
-      title: 'Find compatible PC parts',
-      description: 'Search static product facts against the latest shared build and goal. All prices and budgets are in US dollars (USD). Returns app-calculated compatibility, projected total, budget, and game performance; do not invent these facts.',
+      title: 'Read product facts without changing the page',
+      description: 'Read-only catalog lookup for raw product facts, explicit chat-only requests, or custom research. Does not display candidates or change the page. For recommendations, comparisons, or "which part should I choose?", prefer recommend_products, which also displays options. All prices are USD. Returns app-calculated compatibility, projected total, budget, and game performance; do not invent facts. Custom curated options can be displayed afterward with show_product_candidates.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -241,7 +290,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'show_product_candidates',
       title: 'Show product candidates in the shop',
-      description: 'Render up to three meaningfully different product candidates in the visible shop recommendation UI. Supply product IDs and reasons only; the app renders all prices, compatibility, and performance facts.',
+      description: 'Display a custom shortlist of up to three products already researched with find_products, with agent-written reasons. For ordinary recommendations or follow-up part questions, prefer recommend_products to choose and display options in one call. This only updates the recommendation cards, not selected parts. Supply product IDs and reasons; the app renders factual prices, compatibility, and performance.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -256,7 +305,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
               type: 'object',
               properties: {
                 productId: { type: 'string' },
-                angle: { type: 'string', enum: ['BEST MATCH', 'BEST BALANCE', 'PERFORMANCE', 'BUDGET', 'AESTHETICS', 'WHITE BUILD'] },
+                angle: { type: 'string', enum: ['BEST MATCH', 'BEST BALANCE', 'PERFORMANCE', 'BUDGET', 'ALTERNATIVE', 'AESTHETICS', 'WHITE BUILD'] },
                 reason: { type: 'string', minLength: 1, maxLength: 240 },
               },
               required: ['productId', 'angle', 'reason'],

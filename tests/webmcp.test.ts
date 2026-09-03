@@ -1,18 +1,32 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createWebMcpTools } from '../lib/webmcp/tools.ts';
+import { baseToolNames, createWebMcpTools } from '../lib/webmcp/tools.ts';
+import { categories } from '../lib/domain/types.ts';
+import { productsById } from '../lib/domain/data.ts';
 import { createBuildStore } from '../lib/store/build-store.ts';
 
 const options = { signal: new AbortController().signal };
 
-test('declares the six required WebMCP tools with correct read hints', () => {
+type RecommendationResult = {
+  displayed: boolean;
+  count: number;
+  currency: string;
+  buildChanged: boolean;
+  basedOnBuildVersion: number;
+  productIds: string[];
+  missingCategories: string[];
+  notes: string[];
+};
+
+test('preserves the six original tools and adds an explicit recommendation-and-display action', () => {
   const tools = createWebMcpTools(createBuildStore());
   assert.deepEqual(
     tools.map((tool) => tool.name),
     [
       'get_current_build',
       'set_build_goal',
+      'recommend_products',
       'find_products',
       'show_product_candidates',
       'preview_build_changes',
@@ -21,7 +35,87 @@ test('declares the six required WebMCP tools with correct read hints', () => {
   );
   assert.equal(tools[0]?.annotations?.readOnlyHint, true);
   assert.equal(tools[1]?.annotations?.readOnlyHint, false);
-  assert.equal(tools[2]?.annotations?.readOnlyHint, true);
+  assert.deepEqual(tools.map((tool) => tool.name), [...baseToolNames]);
+  assert.equal(tools.find((tool) => tool.name === 'find_products')?.annotations?.readOnlyHint, true);
+  assert.equal(tools.find((tool) => tool.name === 'recommend_products')?.annotations?.readOnlyHint, false);
+});
+
+function recommendationTools() {
+  const store = createBuildStore();
+  const tools = Object.fromEntries(createWebMcpTools(store).map((tool) => [tool.name, tool]));
+  return { store, tools };
+}
+
+test('CPU follow-up displays three options in one call, without adding or previewing a part', async () => {
+  const { store, tools } = recommendationTools();
+  store.getState().selectProduct('case-01');
+  store.getState().selectProduct('gpu-02');
+  const before = store.getState();
+  const result = await tools.recommend_products.execute({ category: 'cpu' }, options) as RecommendationResult;
+  assert.equal(result.displayed, true);
+  assert.equal(result.count, 3);
+  assert.equal(result.currency, 'USD');
+  assert.equal(result.buildChanged, false);
+  assert.equal(store.getState().activeCategory, 'cpu');
+  assert.equal(store.getState().recommendation?.candidates.length, 3);
+  assert.equal(store.getState().recommendation?.candidates[0].productId, 'cpu-01');
+  assert.deepEqual(result.productIds, store.getState().recommendation?.candidates.map((item) => item.productId));
+  assert.equal(store.getState().selected, before.selected);
+  assert.equal(store.getState().goal, before.goal);
+  assert.equal(store.getState().version, before.version);
+  assert.equal(store.getState().preview, null);
+  assert.deepEqual(result.missingCategories, ['cpu', 'motherboard', 'psu']);
+  assert.match(result.notes.join(' '), /GPU-based/);
+});
+
+test('recommendations replace the previous category and use the latest human-selected motherboard', async () => {
+  const { store, tools } = recommendationTools();
+  await tools.recommend_products.execute({ category: 'gpu' }, options);
+  store.getState().selectProduct('mb-02');
+  await tools.recommend_products.execute({ category: 'cpu' }, options);
+  assert.deepEqual(store.getState().recommendation?.candidates.map((item) => item.productId), ['cpu-01', 'cpu-02', 'cpu-03']);
+  store.getState().selectProduct('mb-05');
+  const result = await tools.recommend_products.execute({ category: 'cpu' }, options) as RecommendationResult;
+  assert.equal(result.basedOnBuildVersion, 2);
+  assert.equal(store.getState().recommendation?.basedOnBuildVersion, 2);
+  for (const item of store.getState().recommendation!.candidates) {
+    const product = productsById[item.productId];
+    assert.equal(product.category === 'cpu' && product.socket, 'O1');
+  }
+});
+
+test('recommendation action covers all part categories and accepts an explicit smaller count', async () => {
+  const { store, tools } = recommendationTools();
+  for (const category of categories) {
+    const result = await tools.recommend_products.execute({ category }, options) as RecommendationResult;
+    assert.equal(result.count, 3);
+    assert.equal(new Set(result.productIds).size, 3);
+    assert.ok(result.productIds.every((id: string) => productsById[id].category === category));
+    assert.equal(store.getState().activeCategory, category);
+  }
+  const result = await tools.recommend_products.execute({ category: 'cpu', count: 2 }, options) as RecommendationResult;
+  assert.equal(result.count, 2);
+});
+
+test('recommendations validate inputs before changing visible state', async () => {
+  const { store, tools } = recommendationTools();
+  await tools.recommend_products.execute({ category: 'cpu' }, options);
+  const before = store.getState();
+  for (const input of [null, {}, { category: 'ram' }, { category: 'cpu', count: 0 }, { category: 'cpu', count: 4 }, { category: 'cpu', count: 1.5 }, { category: 'cpu', count: '3' }, { category: 'cpu', count: NaN }, { category: 'cpu', productId: 'cpu-03' }]) {
+    assert.throws(() => tools.recommend_products.execute(input as Record<string, unknown>, options), /INVALID/);
+    assert.equal(store.getState(), before);
+  }
+});
+
+test('read-only product search never changes candidates or the selected build', async () => {
+  const { store, tools } = recommendationTools();
+  await tools.recommend_products.execute({ category: 'cpu' }, options);
+  const before = store.getState();
+  await tools.find_products.execute({ category: 'gpu' }, options);
+  assert.equal(store.getState(), before);
+  assert.match(tools.find_products.description, /recommend_products/);
+  assert.match(tools.recommend_products.description, /CPUはどれがいい/);
+  assert.match(tools.recommend_products.description, /Which CPU/);
 });
 
 test('agent tools read and update the same store used by the human UI', async () => {

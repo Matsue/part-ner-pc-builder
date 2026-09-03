@@ -110,6 +110,7 @@ export type CandidateAngle =
   | 'BEST BALANCE'
   | 'PERFORMANCE'
   | 'BUDGET'
+  | 'ALTERNATIVE'
   | 'AESTHETICS'
   | 'WHITE BUILD';
 
