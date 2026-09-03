@@ -194,7 +194,7 @@ npx --no-install oxlint app lib scripts
 npx --no-install tsc --noEmit --incremental false
 ```
 
-All **38 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, value-first GPU ranking, tentative color preferences with manual-selection provenance and explicit overrides, factual trade-offs, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, the finish-build approval flow, blocked agent application, single-use and invalidated previews, image/alt-text coverage, update announcements, and static-preview configuration.
+All **39 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, value-first GPU ranking, tentative color preferences with manual-selection provenance and explicit overrides, factual trade-offs, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, the finish-build approval flow, blocked agent application, single-use and invalidated previews, image/alt-text coverage, update announcements, bottom-right debug-panel placement, and static-preview configuration.
 
 The scoped application lint command above passes. The repository-wide `npm run lint` also checks test typing and currently reports pre-existing issues; it is not a clean full-repository gate.
 
