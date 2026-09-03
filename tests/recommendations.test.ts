@@ -45,12 +45,12 @@ test('manual white GPU selection creates a tentative preference, not a new state
   assert.equal(store.getState().recommendation!.candidates[0].productId, 'mb-02');
 });
 
-test('agent-selected parts, mixed colors, previews, and resets cannot invent a human preference', () => {
+test('approved proposals, mixed colors, previews, and resets cannot invent a human preference', () => {
   const { store } = setup();
   store.getState().selectProduct('case-01');
   const preview = store.getState().previewChanges({ basedOnBuildVersion: 1, changes: { gpu: 'gpu-02' } });
   assert.equal(currentBuildSnapshot(store).colorPreference.source, 'unspecified');
-  store.getState().applyPreview(preview.id, 'agent');
+  store.getState().applyPreview(preview.id, 'human');
   assert.equal(currentBuildSnapshot(store).colorPreference.source, 'unspecified');
   store.getState().selectProduct('gpu-02', 'human');
   assert.equal(currentBuildSnapshot(store).colorPreference.source, 'inferred');

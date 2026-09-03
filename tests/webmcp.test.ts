@@ -19,7 +19,7 @@ type RecommendationResult = {
   notes: string[];
 };
 
-test('preserves the six original tools and adds an explicit recommendation-and-display action', () => {
+test('exposes recommendations and previews, but no agent apply action', () => {
   const tools = createWebMcpTools(createBuildStore());
   assert.deepEqual(
     tools.map((tool) => tool.name),
@@ -30,7 +30,6 @@ test('preserves the six original tools and adds an explicit recommendation-and-d
       'find_products',
       'show_product_candidates',
       'preview_build_changes',
-      'apply_build_changes',
     ],
   );
   assert.equal(tools[0]?.annotations?.readOnlyHint, true);
@@ -140,7 +139,38 @@ test('agent tools read and update the same store used by the human UI', async ()
   assert.equal(store.getState().recommendation?.candidates[1]?.productId, 'gpu-02');
 });
 
-test('preview/apply tools preserve stale-preview protection', async () => {
+test('finishing the demo build stages changes and waits for in-page approval', async () => {
+  const { store, tools } = recommendationTools();
+  for (const id of ['case-01', 'gpu-02', 'cpu-01']) store.getState().selectProduct(id);
+  await tools.set_build_goal.execute({ budgetUsd: 2000, theme: 'white' }, options);
+  const before = store.getState();
+  const preview = await tools.preview_build_changes.execute({
+    basedOnBuildVersion: before.version,
+    changes: { motherboard: 'mb-02', psu: 'psu-04' },
+  }, options) as { previewId: string; applied: boolean; requiresHumanApproval: boolean; nextStep: string; totalUsd: number };
+  assert.equal(store.getState().selected, before.selected);
+  assert.equal(store.getState().version, before.version);
+  assert.equal(preview.applied, false);
+  assert.equal(preview.requiresHumanApproval, true);
+  assert.equal(preview.totalUsd, 1970);
+  assert.match(preview.nextStep, /Approve & apply preview/);
+  assert.ok(!createWebMcpTools(store).some((tool) => tool.name === 'apply_build_changes'));
+  const snapshot = await tools.get_current_build.execute({}, options) as {
+    pendingPreview: { previewId: string; status: string } | null;
+  };
+  assert.equal(snapshot.pendingPreview?.previewId, preview.previewId);
+  assert.equal(snapshot.pendingPreview?.status, 'awaiting_human_approval');
+  // A legacy/cached apply callback must fail even if it has the preview ID.
+  assert.throws(() => store.getState().applyPreview(preview.previewId, 'agent'), /HUMAN_APPROVAL_REQUIRED/);
+  assert.equal(store.getState().selected, before.selected);
+  store.getState().applyPreview(preview.previewId, 'human');
+  assert.equal(store.getState().selected.motherboard?.id, 'mb-02');
+  assert.equal(store.getState().selected.psu?.id, 'psu-04');
+  assert.equal(store.getState().version, before.version + 1);
+  assert.equal(store.getState().preview, null);
+});
+
+test('in-page approval preserves stale-preview protection', async () => {
   const store = createBuildStore();
   store.getState().selectProduct('case-01', 'human');
   const tools = Object.fromEntries(createWebMcpTools(store).map((tool) => [tool.name, tool]));
@@ -151,7 +181,7 @@ test('preview/apply tools preserve stale-preview protection', async () => {
 
   store.getState().selectProduct('gpu-02', 'human');
   assert.throws(
-    () => tools.apply_build_changes.execute({ previewId: preview.previewId }, options),
+    () => store.getState().applyPreview(preview.previewId, 'human'),
     (error: unknown) => error instanceof Error && error.message === 'PREVIEW_EXPIRED',
   );
 });

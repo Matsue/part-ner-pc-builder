@@ -410,7 +410,7 @@ function BuildSidebar() {
               <GitCompareArrows className="size-4 text-cyan-300" />
               <div>
                 <div className="text-caption font-black uppercase tracking-[0.12em] text-zinc-200">Review changes</div>
-                <div className="text-caption text-muted-foreground">Preview only — not applied</div>
+                <div className="text-caption text-muted-foreground">Preview only — waiting for your approval</div>
               </div>
             </div>
             <Button variant="ghost" size="icon" aria-label="Dismiss preview" onClick={() => { buildStore.getState().dismissPreview(); document.getElementById('your-build')?.focus(); }} className="text-muted-foreground hover:text-zinc-300"><X className="size-4" /></Button>
@@ -435,6 +435,7 @@ function BuildSidebar() {
               <div className={`mt-0.5 text-caption font-bold ${previewCompatibility.status === 'compatible' ? 'text-lime-300' : 'text-red-400'}`}>{previewCompatibility.status === 'compatible' ? 'Compatible' : previewCompatibility.status === 'warning' ? 'Check required' : 'Not compatible'}</div>
             </div>
           </div>
+          <p className="mt-3 text-caption text-muted-foreground">Your build stays unchanged until you approve below. Your assistant cannot apply this preview.</p>
           {previewExpired ? (
             <div className="mt-3 rounded-lg bg-red-400/10 px-2.5 py-2 text-caption font-semibold text-red-300">This preview is out of date. Your build has changed. Ask your assistant for a new preview.</div>
           ) : (

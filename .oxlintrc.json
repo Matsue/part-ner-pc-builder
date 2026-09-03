@@ -31,6 +31,20 @@
     "coverage/**",
     "next-env.d.ts"
   ],
+  "overrides": [
+    {
+      "files": ["lib/webmcp/**/*.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "property": "applyPreview", "message": "WebMCP may only stage previews. Applying is reserved for the human UI." },
+          { "property": "selectProduct", "message": "WebMCP must use previewChanges instead of selecting parts directly." },
+          { "property": "clearBuild", "message": "WebMCP must preview removals instead of resetting the build." },
+          { "property": "setState", "message": "WebMCP must use store actions, not bypass preview safeguards with setState." }
+        ]
+      }
+    }
+  ],
   "rules": {
     "no-array-constructor": "error",
     "no-var": "error",

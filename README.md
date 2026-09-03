@@ -21,7 +21,7 @@ PART / NER gives the assistant structured access to the same catalog, compatibil
 - **Shared context:** human clicks and agent tool calls read and update one build store within the current page.
 - **Visible recommendations:** one `recommend_products` call ranks and displays up to three candidates, without selecting a part.
 - **App-owned facts:** prices, projected totals, compatibility, and demo FPS estimates come from application logic, not generated claims.
-- **Reviewable changes:** an agent can propose several replacements in one before/after preview. Applying requires a valid preview ID and an unchanged build version.
+- **Human-approved changes:** an agent can propose several replacements in one before/after preview, but cannot apply them. The person must click **Approve & apply preview** in the page; missing, stale, or already-applied previews are rejected.
 - **Context-sensitive capabilities:** `resolve_build_issues` is registered only while the current build has a compatibility error.
 
 The intended audience is people comparing unfamiliar components with an assistant. This prototype explores that collaborative workflow with a small, reproducible catalog rather than claiming real-world hardware coverage.
@@ -48,7 +48,7 @@ Start with a fresh page. It starts with a $2,000 budget and **no color preferenc
 
 Expected: the Graphics card category opens with **VectorArc G88 16GB** ($828, **BEST BALANCE**), **PixelForge V70 White 12GB** ($898, **AESTHETICS**), and **VectorArc G96 16GB** ($998, **PERFORMANCE**). The case alone does not establish a color preference. G88 is cheaper and has more VRAM and higher estimated FPS than V70 White; the white GPU still meets both targets and is 16 mm shorter. Trade-offs compare these concrete differences, not just the remaining budget.
 
-Choose **PixelForge V70 White 12GB** yourself for its appearance, despite G88's value advantage. Only now do the matching manual case/GPU selections produce a **tentative white-style preference**, shown as inferred in the header and returned to the agent with the supporting product IDs. Stated goals are not silently rewritten. Agent-selected parts and approved batch previews do not create this inference.
+Choose **PixelForge V70 White 12GB** yourself for its appearance, despite G88's value advantage. Only now do the matching manual case/GPU selections produce a **tentative white-style preference**, shown as inferred in the header and returned to the agent with the supporting product IDs. Stated goals are not silently rewritten. Agent-proposed parts applied through an approved batch preview do not create this inference.
 
 **3. Continue naturally.**
 
@@ -58,9 +58,11 @@ Expected: three CPU candidates appear in the page, taking the current build into
 
 **4. Stage a multi-part change.**
 
-> Preview adding CorePeak A6-65, FrostBoard A5M Ice, and VoltNest 750 Snow to my current build. Don't apply the changes yet.
+Select **CorePeak A6-65** yourself from the CPU candidates. Then ask:
 
-Expected: **Your build** shows the proposed changes and a projected total of **$1,970.00**. Click **Approve & apply preview** to apply them. On a narrow screen, use **Review preview** in the sticky budget summary to jump to the panel.
+> Finish the rest of the build. Keep the white theme and stay under $2000.
+
+Expected: **Your build** shows a preview adding **FrostBoard A5M Ice** and **VoltNest 750 Snow**, with a projected total of **$1,970.00**. The selected case, GPU, and CPU stay unchanged; the motherboard and PSU remain unselected until you click **Approve & apply preview**. The assistant cannot apply its own proposal, even if the request says “finish.” On a narrow screen, use **Review preview** in the sticky budget summary to jump to the panel.
 
 **5. Explore a conflict.** Select **Orion C6-125** manually in the Processor category. It has a different socket from the selected motherboard. Then ask:
 
@@ -110,13 +112,12 @@ if (context?.registerTool) {
 
 | Tool | Purpose | Effect on the app |
 | --- | --- | --- |
-| `get_current_build` | Read selected parts, goals, totals, issues, and visible recommendations | Read-only |
+| `get_current_build` | Read selected parts, goals, totals, issues, visible recommendations, and pending preview status | Read-only |
 | `set_build_goal` | Set USD budget, theme, priority, and game targets | Updates goals and build version; does not select parts |
 | `recommend_products` | Rank and display 1–3 options for a category; defaults to 3 | Updates category and recommendation cards only |
 | `find_products` | Read/filter catalog facts and projected outcomes | Read-only; does not display cards |
 | `show_product_candidates` | Display a custom shortlist with agent-written reasons | Updates category and cards, not selected parts |
-| `preview_build_changes` | Stage additions, replacements, or removals against a build version | Creates a preview, not an applied change |
-| `apply_build_changes` | Apply a previously created preview by ID | Updates selected parts; rejects missing/expired previews |
+| `preview_build_changes` | Stage additions, replacements, or removals against a build version | Creates a preview and returns an instruction to await in-page approval; never applies |
 | `resolve_build_issues` | Return repair plans for a current compatibility error | Read-only; registered only while an error exists |
 
 Supported categories are `case`, `gpu`, `cpu`, `motherboard`, and `psu`.
@@ -125,7 +126,9 @@ Supported categories are `case`, `gpu`, `cpu`, `motherboard`, and `psu`.
 
 Both the React UI and WebMCP callbacks use the same Zustand store. Human selections and agent mutations increment a shared version. Custom shortlists and previews must reference the current version; applying a stale preview raises `PREVIEW_EXPIRED` instead of overwriting newer choices.
 
-The UI provides a direct approval button. The apply tool is described as requiring the user's approval, but the app does **not** independently authenticate conversational consent: the host agent must obtain it. The enforced application boundary is an existing, current preview ID—not a separate human-authorization token. This demo has no checkout or other irreversible transaction.
+**There is no `apply_build_changes` WebMCP tool.** Registering it only while a preview exists would still let an agent create and immediately apply its own proposal. Instead, WebMCP stops at staging; only the in-page **Approve & apply preview** button invokes the human apply action. The store rejects agent apply calls (including legacy callbacks holding a valid preview ID) and agent direct selections. A lint rule also prohibits WebMCP modules from calling selection, apply, reset, or raw state-write methods. Goals and recommendation cards can still be updated through their dedicated tools; they do not select parts.
+
+Approval applies exactly the current preview once. Dismissal, replacement, reset, or a newer build/goal version invalidates the old proposal. Conversational “yes” is intentionally insufficient: the user must approve in the page. This is an application-level WebMCP boundary, not protection against arbitrary scripts or a separate browser-control agent clicking UI buttons. This demo has no checkout or other irreversible transaction.
 
 ## Architecture
 
@@ -191,7 +194,7 @@ npx --no-install oxlint app lib scripts
 npx --no-install tsc --noEmit --incremental false
 ```
 
-All **35 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, value-first GPU ranking, tentative color preferences with manual-selection provenance and explicit overrides, factual trade-offs, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, preview expiry, image/alt-text coverage, update announcements, and static-preview configuration.
+All **38 automated tests** passed on September 3, 2026. Coverage includes compatibility errors and power warnings, USD totals, recommendation display without part selection, value-first GPU ranking, tentative color preferences with manual-selection provenance and explicit overrides, factual trade-offs, read-only lookup behavior, current-motherboard ranking, invalid recommendation input, the finish-build approval flow, blocked agent application, single-use and invalidated previews, image/alt-text coverage, update announcements, and static-preview configuration.
 
 The scoped application lint command above passes. The repository-wide `npm run lint` also checks test typing and currently reports pre-existing issues; it is not a clean full-repository gate.
 
@@ -222,7 +225,7 @@ AI image generation produced the fictional component renders and project artwork
 - **Partial-build totals:** candidate totals include selected parts plus that candidate. Unselected categories still require budget. Recommendations expose alternatives that may miss some goals.
 - **Page-local state:** refreshing resets the build. “Shared” means the human and agent in the same page, not cross-device collaboration or persistent accounts.
 - **Experimental browser API:** this version targets `document.modelContext`; environments exposing a different WebMCP API may require adaptation. Unsupported browsers retain manual browsing but cannot invoke these tools.
-- **Host-managed consent:** preview IDs and version checks are enforced, but conversational approval remains the host agent's responsibility.
+- **In-page approval only:** conversational approval cannot apply a proposal. The user must review and approve it in the page; WebMCP has no apply action.
 
 ## License and submission materials
 

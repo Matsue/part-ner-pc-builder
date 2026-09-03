@@ -29,7 +29,6 @@ export const baseToolNames = [
   'find_products',
   'show_product_candidates',
   'preview_build_changes',
-  'apply_build_changes',
 ] as const;
 
 type AnyInput = Record<string, unknown>;
@@ -74,6 +73,10 @@ export function currentBuildSnapshot(store: StoreApi<BuildStore>) {
     buildVersion: state.version,
     activeCategory: state.activeCategory,
     visibleRecommendations: state.recommendation?.category === state.activeCategory ? state.recommendation : null,
+    pendingPreview: state.preview ? {
+      ...previewResult(state.preview, state.goal),
+      status: state.preview.basedOnBuildVersion === state.version ? 'awaiting_human_approval' : 'expired',
+    } : null,
     goal: state.goal,
     colorPreference: resolveColorPreference(state.goal, state.selected, state.selectionSources, state.themeExplicitlySet),
     selectedProducts: selectedProducts(state.selected),
@@ -149,6 +152,9 @@ function previewResult(
   return {
     currency,
     previewId: preview.id,
+    applied: false,
+    requiresHumanApproval: true,
+    nextStep: 'Stop here and ask the user to review the changes in Your build and click "Approve & apply preview". No WebMCP tool can apply changes. If this preview is expired, create a fresh preview instead. A request to finish the build is not approval of the resulting proposal.',
     basedOnBuildVersion: preview.basedOnBuildVersion,
     before: selectedProducts(preview.before),
     after: selectedProducts(preview.after),
@@ -353,7 +359,7 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
     {
       name: 'preview_build_changes',
       title: 'Preview PC build changes',
-      description: 'Stage one or more part changes against a specific live build version and show before/after facts in the page. This does not apply the changes.',
+      description: 'Use for any request to add, replace, remove, or finish parts, including "Finish the rest of the build. Keep the white theme and stay under $2000." or "残りの構成を完成させて". Read the latest build and catalog facts, preserve existing selections unless the user requests replacements, then stage the proposed changes together against that build version. Shows before/after parts, total, and compatibility in Your build without applying. Stop after staging and ask the user to click "Approve & apply preview" in the page. Only that in-page action applies changes; there is no apply tool. A general instruction to finish a build is not approval of an unseen proposal.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -383,23 +389,6 @@ export function createWebMcpTools(store: StoreApi<BuildStore>): WebMCP.ModelCont
           changes,
         });
         return previewResult(preview, store.getState().goal);
-      },
-    },
-    {
-      name: 'apply_build_changes',
-      title: 'Apply approved PC build changes',
-      description: 'Apply exactly one previously generated preview by ID after the user approves it. Rejects missing or expired previews and accepts no free-form part changes.',
-      inputSchema: {
-        type: 'object',
-        properties: { previewId: { type: 'string', minLength: 1 } },
-        required: ['previewId'],
-        additionalProperties: false,
-      },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute: (rawInput) => {
-        const input = objectInput(rawInput);
-        const preview = store.getState().applyPreview(requiredString(input, 'previewId'), 'agent');
-        return { applied: true, previewId: preview.id, ...currentBuildSnapshot(store) };
       },
     },
   ];

@@ -72,6 +72,7 @@ export function createBuildStore(): StoreApi<BuildStore> {
     lastMutation: null,
     setActiveCategory: (activeCategory) => set({ activeCategory }),
     selectProduct: (productId, actor = 'human') => {
+      if (actor !== 'human') throw new Error('HUMAN_APPROVAL_REQUIRED');
       const product = productsById[productId];
       if (!product) throw new Error('PRODUCT_NOT_FOUND');
       set((state) => ({
@@ -125,6 +126,9 @@ export function createBuildStore(): StoreApi<BuildStore> {
       const preview = get().preview;
       if (!preview || preview.id !== previewId) throw new Error('PREVIEW_NOT_FOUND');
       assertVersion(get().version, preview.basedOnBuildVersion, 'PREVIEW_EXPIRED');
+      // A preview ID proves what was proposed, not that a person approved it.
+      // Only the in-page approval handler may apply; WebMCP cannot self-approve.
+      if (actor !== 'human') throw new Error('HUMAN_APPROVAL_REQUIRED');
       set((state) => {
         const selectionSources = { ...state.selectionSources };
         for (const category of Object.keys(preview.changes) as Category[]) {
